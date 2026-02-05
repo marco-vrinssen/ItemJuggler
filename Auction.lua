@@ -12,10 +12,17 @@ local function postAuction()
     end
 end
 
+postFrame:RegisterEvent("ADDON_LOADED")
 postFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
 postFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
-postFrame:SetScript("OnEvent", function(self, e)
-    if e == "AUCTION_HOUSE_SHOW" then
+postFrame:SetScript("OnEvent", function(self, e, arg1)
+    if e == "ADDON_LOADED" then
+        if arg1 == "Blizzard_AuctionHouseUI" then
+            if AUCTION_HOUSE_DEFAULT_FILTERS then
+                AUCTION_HOUSE_DEFAULT_FILTERS[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
+            end
+        end
+    elseif e == "AUCTION_HOUSE_SHOW" then
         postEnabled = true
         self:SetScript("OnKeyDown", function(s, k)
             if k == "SPACE" and postEnabled then
@@ -28,7 +35,7 @@ postFrame:SetScript("OnEvent", function(self, e)
         self:SetPropagateKeyboardInput(true)
         self:EnableKeyboard(true)
         self:SetFrameStrata("HIGH")
-    else
+    elseif e == "AUCTION_HOUSE_CLOSED" then
         postEnabled = false
         self:SetScript("OnKeyDown", nil)
         self:EnableKeyboard(false)

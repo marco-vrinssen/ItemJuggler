@@ -1,13 +1,10 @@
 ## Interface: 120000
 ## Title: Item Juggler
-## Notes: Fast looting, auto sell/repair, auction favorites sync, and quick posting
+## Notes: Fast looting, auto sell/repair, and quick auction posting
 ## Author: MIYANKO
-## Version: 1.0.0
-## SavedVariables: ItemJugglerDB
-## SavedVariablesPerCharacter: ItemJugglerCharDB
+## Version: 1.1.0
 ## X-Curse-Project-ID: 1454032
 
 Looting.lua
-Vendor.lua
-Favorites.lua
-Auctioning.lua
+Merchant.lua
+Auction.lua
