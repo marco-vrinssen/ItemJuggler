@@ -4,7 +4,6 @@ Minimal WoW addon for streamlined item handling.
 
 ## Features
 
-- **Fast Looting** - Instant auto-loot with delay protection
 - **Auto Sell Junk** - Sells gray items at vendors
 - **Auto Repair** - Repairs gear at vendors
 - **Current Expansion Filter** - Defaults auction house search to current expansion

@@ -1,10 +1,9 @@
 ## Interface: 120000
 ## Title: Item Juggler
-## Notes: Fast looting, auto sell/repair, and quick auction posting
+## Notes: Auto sell/repair at vendors, and quick auction posting
 ## Author: MIYANKO
-## Version: 1.1.0
+## Version: 1.2.0
 ## X-Curse-Project-ID: 1454032
 
-Looting.lua
 Merchant.lua
 Auction.lua
