@@ -8,3 +8,4 @@ Minimal WoW addon for streamlined item handling.
 - **Auto Repair** - Repairs gear at vendors
 - **Current Expansion Filter** - Defaults auction house search to current expansion
 - **Spacebar Posting** - Quick auction posting with Space key
+- **Instant Looting** - Speeds up looting by collecting all items immediately
