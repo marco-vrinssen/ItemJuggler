@@ -1,6 +1,8 @@
-local f = CreateFrame("Frame")
-f:RegisterEvent("MERCHANT_SHOW")
-f:SetScript("OnEvent", function()
+-- [auto sell junk and repair gear when visiting a merchant]
+
+local MerchantFrame = CreateFrame("Frame")
+MerchantFrame:RegisterEvent("MERCHANT_SHOW")
+MerchantFrame:SetScript("OnEvent", function()
     C_Timer.After(0, function()
         if MerchantSellAllJunkButton and MerchantSellAllJunkButton:IsShown() then
             MerchantSellAllJunkButton:Click()
