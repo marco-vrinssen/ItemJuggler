@@ -1,10 +1,10 @@
--- [enable spacebar auction posting and default to current expansion filter]
+-- Enable spacebar auction posting and default to current expansion filter
 
-local AuctionFrame = CreateFrame("Frame")
-local isPostEnabled = false
+local auctionFrm = CreateFrame("Frame")
+local postEnabled = false
 
 local function PostAuction()
-    if not isPostEnabled or not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then
+    if not postEnabled or not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then
         return
     end
     local sellFrames = {
@@ -20,10 +20,10 @@ local function PostAuction()
     end
 end
 
-AuctionFrame:RegisterEvent("ADDON_LOADED")
-AuctionFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
-AuctionFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
-AuctionFrame:SetScript("OnEvent", function(self, event, arg1)
+auctionFrm:RegisterEvent("ADDON_LOADED")
+auctionFrm:RegisterEvent("AUCTION_HOUSE_SHOW")
+auctionFrm:RegisterEvent("AUCTION_HOUSE_CLOSED")
+auctionFrm:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == "Blizzard_AuctionHouseUI" then
             if AUCTION_HOUSE_DEFAULT_FILTERS then
@@ -31,9 +31,9 @@ AuctionFrame:SetScript("OnEvent", function(self, event, arg1)
             end
         end
     elseif event == "AUCTION_HOUSE_SHOW" then
-        isPostEnabled = true
+        postEnabled = true
         self:SetScript("OnKeyDown", function(self, key)
-            if key == "SPACE" and isPostEnabled then
+            if key == "SPACE" and postEnabled then
                 PostAuction()
                 self:SetPropagateKeyboardInput(false)
             else
@@ -44,7 +44,7 @@ AuctionFrame:SetScript("OnEvent", function(self, event, arg1)
         self:EnableKeyboard(true)
         self:SetFrameStrata("HIGH")
     elseif event == "AUCTION_HOUSE_CLOSED" then
-        isPostEnabled = false
+        postEnabled = false
         self:SetScript("OnKeyDown", nil)
         self:EnableKeyboard(false)
     end
