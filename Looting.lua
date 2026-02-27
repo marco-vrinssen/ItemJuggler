@@ -1,19 +1,20 @@
--- [collect all loot items instantly when the loot window opens]
+local addon = CreateFrame("Frame")
+local epoch = 0
 
 local LOOT_DELAY = 0.1
-local lastLootTime = 0
 
-local LootFrame = CreateFrame("Frame")
-LootFrame:RegisterEvent("LOOT_READY")
-LootFrame:SetScript("OnEvent", function()
+addon:RegisterEvent("LOOT_READY")
+
+addon:SetScript("OnEvent", function()
     if GetCVarBool("autoLootDefault") ~= IsModifiedClick("AUTOLOOTTOGGLE") then
-        return
+        if (GetTime() - epoch) >= LOOT_DELAY then
+            if TSMDestroyBtn and TSMDestroyBtn:IsShown() and TSMDestroyBtn:GetButtonState() == "DISABLED" then epoch = GetTime() return
+            end
+            for i = GetNumLootItems(), 1, -1 do
+                LootSlot(i)
+            end
+            epoch = GetTime()
+        end
     end
-    if (GetTime() - lastLootTime) < LOOT_DELAY then
-        return
-    end
-    for i = GetNumLootItems(), 1, -1 do
-        LootSlot(i)
-    end
-    lastLootTime = GetTime()
-end)
+end
+)

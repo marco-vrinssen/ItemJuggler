@@ -1,4 +1,4 @@
-## Interface: 110100
+## Interface: 120000
 ## Title: Item Juggler
 ## Notes: Auto sell/repair at vendors, quick auction posting, and instant looting
 ## Author: MIYANKO
