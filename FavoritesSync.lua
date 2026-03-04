@@ -1,9 +1,18 @@
 -- Sync auction house and crafting order favorites across all characters
+--
+-- Account DB (MyTemsFavoritesDB) is the single source of truth.
+-- Per-character DB (MyTemsFavoritesCharDB) stores a snapshot of what was
+-- last synced, plus an initialized flag.
+--
+-- First session:  Push account favorites to character, then discover
+--                 pre-existing character favorites via browse results
+--                 and merge them into the account DB.
+-- Later sessions: Two-way diff against the snapshot to propagate adds
+--                 and removals made on other characters.
 
 local ADDON_NAME = "MyTems"
-local favoritesDB, characterDB
+local accountDB, characterDB
 local syncing = false
-local auctionHouseOpen = false
 
 ----------------------------------------------------------------
 -- Item key handling
@@ -41,76 +50,101 @@ local function GetItemLink(itemKey)
     return "|cff9d9d9d[Unknown]|r"
 end
 
-local function Notify(added, displayLink)
+local function Notify(added, itemKey)
     local prefix = added and "|cff00ff00[+]|r " or "|cffff0000[-]|r "
     if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage(prefix .. displayLink)
+        DEFAULT_CHAT_FRAME:AddMessage(prefix .. GetItemLink(itemKey))
     end
 end
 
 ----------------------------------------------------------------
--- Favorite change hook
+-- Hook: capture user-initiated favorite changes in real time
 ----------------------------------------------------------------
 
 hooksecurefunc(C_AuctionHouse, "SetFavoriteItem", function(itemKey, isFavorite)
-    if syncing or not favoritesDB or not characterDB then return end
+    if syncing or not accountDB or not characterDB then return end
     local key = SerializeItemKey(itemKey)
+    local copy = CopyItemKey(itemKey)
     if isFavorite then
-        favoritesDB.favorites[key] = CopyItemKey(itemKey)
-        characterDB.synced[key] = CopyItemKey(itemKey)
+        accountDB.favorites[key] = copy
+        characterDB.snapshot[key] = copy
     else
-        favoritesDB.favorites[key] = nil
-        characterDB.synced[key] = nil
+        accountDB.favorites[key] = nil
+        characterDB.snapshot[key] = nil
     end
-    Notify(isFavorite, GetItemLink(itemKey))
+    Notify(isFavorite, itemKey)
 end)
 
 ----------------------------------------------------------------
--- Import pre-existing favorites from browse results
+-- Discover pre-existing favorites from browse results
+-- Used during first session to merge character favorites
+-- into account DB before the character is marked initialized
 ----------------------------------------------------------------
 
-local function ImportFavorite(itemKey)
-    if not itemKey or not favoritesDB or not characterDB then return end
+local function DiscoverFavorite(itemKey)
+    if not itemKey or not accountDB or not characterDB then return end
     if not C_AuctionHouse.IsFavoriteItem(itemKey) then return end
     local key = SerializeItemKey(itemKey)
-    if favoritesDB.favorites[key] then return end
-    favoritesDB.favorites[key] = CopyItemKey(itemKey)
-    characterDB.synced[key] = CopyItemKey(itemKey)
+    if accountDB.favorites[key] then return end
+    local copy = CopyItemKey(itemKey)
+    accountDB.favorites[key] = copy
+    characterDB.snapshot[key] = copy
 end
 
 ----------------------------------------------------------------
--- Sync favorites from account DB to character
+-- Sync favorites between account DB and character
 ----------------------------------------------------------------
 
 local function SyncFavorites()
-    if not favoritesDB or not characterDB then return end
+    if not accountDB or not characterDB then return end
     syncing = true
+
+    if not characterDB.initialized then
+        -- First session for this character
+        -- Push all account favorites to character
+
+        for key, itemKey in pairs(accountDB.favorites) do
+            C_AuctionHouse.SetFavoriteItem(itemKey, true)
+            characterDB.snapshot[key] = CopyItemKey(itemKey)
+            Notify(true, itemKey)
+        end
+
+        syncing = false
+
+        -- Search favorites to trigger browse results so DiscoverFavorite
+        -- can find this character's pre-existing favorites and merge them
+
+        C_AuctionHouse.SearchForFavorites({})
+        return
+    end
+
+    -- Subsequent sessions: two-way diff against snapshot
     local changed = false
 
-    -- Add account favorites missing on this character
+    -- Items in account DB but not in snapshot: added on another character
 
-    for key, itemKey in pairs(favoritesDB.favorites) do
-        if not characterDB.synced[key] then
+    for key, itemKey in pairs(accountDB.favorites) do
+        if not characterDB.snapshot[key] then
             C_AuctionHouse.SetFavoriteItem(itemKey, true)
-            characterDB.synced[key] = CopyItemKey(itemKey)
-            Notify(true, GetItemLink(itemKey))
+            characterDB.snapshot[key] = CopyItemKey(itemKey)
+            Notify(true, itemKey)
             changed = true
         end
     end
 
-    -- Remove favorites that were deleted from account DB
+    -- Items in snapshot but not in account DB: removed on another character
 
-    for key, itemKey in pairs(characterDB.synced) do
-        if not favoritesDB.favorites[key] then
+    for key, itemKey in pairs(characterDB.snapshot) do
+        if not accountDB.favorites[key] then
             C_AuctionHouse.SetFavoriteItem(itemKey, false)
-            Notify(false, GetItemLink(itemKey))
-            characterDB.synced[key] = nil
+            characterDB.snapshot[key] = nil
+            Notify(false, itemKey)
             changed = true
         end
     end
 
     syncing = false
-    if changed and auctionHouseOpen then
+    if changed then
         C_AuctionHouse.SearchForFavorites({})
     end
 end
@@ -128,14 +162,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
         local addon = ...
         if addon == ADDON_NAME then
             MyTemsFavoritesDB = MyTemsFavoritesDB or {}
-            favoritesDB = MyTemsFavoritesDB
-            favoritesDB.favorites = favoritesDB.favorites or {}
+            accountDB = MyTemsFavoritesDB
+            accountDB.favorites = accountDB.favorites or {}
 
             MyTemsFavoritesCharDB = MyTemsFavoritesCharDB or {}
             characterDB = MyTemsFavoritesCharDB
-            characterDB.synced = characterDB.synced or {}
+            characterDB.snapshot = characterDB.snapshot or {}
         elseif addon == "Blizzard_ProfessionsCustomerOrders" then
-            -- Crafting orders share the same item key favorites as auction house
             if ProfessionsCustomerOrdersFrame then
                 ProfessionsCustomerOrdersFrame:HookScript("OnShow", SyncFavorites)
             end
@@ -144,7 +177,6 @@ frame:SetScript("OnEvent", function(_, event, ...)
     end
 
     if event == "AUCTION_HOUSE_SHOW" then
-        auctionHouseOpen = true
         SyncFavorites()
         frame:RegisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
         frame:RegisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_ADDED")
@@ -155,7 +187,12 @@ frame:SetScript("OnEvent", function(_, event, ...)
     end
 
     if event == "AUCTION_HOUSE_CLOSED" then
-        auctionHouseOpen = false
+        -- Mark initialized after first AH session completes
+        -- so future sessions use two-way diff instead of merge
+
+        if characterDB and not characterDB.initialized then
+            characterDB.initialized = true
+        end
         frame:UnregisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
         frame:UnregisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_ADDED")
         frame:UnregisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED")
@@ -164,9 +201,11 @@ frame:SetScript("OnEvent", function(_, event, ...)
         return
     end
 
+    -- Scan browse results to discover favorites not yet in account DB
+
     if event == "AUCTION_HOUSE_BROWSE_RESULTS_UPDATED" then
         for _, result in ipairs(C_AuctionHouse.GetBrowseResults()) do
-            ImportFavorite(result.itemKey)
+            DiscoverFavorite(result.itemKey)
         end
         return
     end
@@ -175,7 +214,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
         local results = ...
         if results then
             for _, result in ipairs(results) do
-                ImportFavorite(result.itemKey)
+                DiscoverFavorite(result.itemKey)
             end
         end
         return
@@ -184,7 +223,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
     if event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
         local itemID = ...
         if itemID then
-            ImportFavorite(C_AuctionHouse.MakeItemKey(itemID))
+            DiscoverFavorite(C_AuctionHouse.MakeItemKey(itemID))
         end
         return
     end
@@ -192,7 +231,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
     if event == "ITEM_SEARCH_RESULTS_UPDATED" then
         local itemKey = ...
         if itemKey then
-            ImportFavorite(itemKey)
+            DiscoverFavorite(itemKey)
         end
         return
     end
