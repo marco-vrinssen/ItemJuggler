@@ -1,4 +1,4 @@
-# FastItems
+# ItemFlow
 
 WoW addon for streamlined item handling and auction house automation.
 

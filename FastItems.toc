@@ -1,11 +1,9 @@
 ## Interface: 120000
-## Title: FastItems
-## Notes: Auto sell/repair at vendors, quick auction posting, instant looting
+## Title: ItemFlow
+## Notes: Auto repair and sell junk at vendors, spacebar auction posting, current expansion filter for auction house and crafting orders, instant background looting
 ## Author: MIYANKO
-## Version: 1.5.0
-## SavedVariables: FastItemsAcctDB
-## SavedVariablesPerCharacter: FastItemsCharDB
+## Version: 1.0.0
 
 Merchant.lua
-Auction.lua
+AHCO.lua
 Looting.lua

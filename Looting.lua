@@ -1,33 +1,129 @@
--- Configure loot settings and suppress loot frame on login to optimize speed because default rate is slower
+-- Automate looting and keep the loot frame hidden during normal looting
 
-local function LootConfig()
-    SetCVar("autoLootRate", 0)
-    LootFrame:UnregisterAllEvents()
-    LootFrame:Hide()
+local lootState = {
+    sessionActive = false,
+    frameHidden = true,
+    slotFailed = false,
+    lastSlotCount = nil,
+    slotTicker = nil,
+    hiddenAnchor = CreateFrame("Frame", nil, UIParent),
+}
+
+lootState.hiddenAnchor:Hide()
+
+-- Reparent loot frame to hidden anchor to suppress it without touching its events
+local function SuppressLootFrame()
+    if LootFrame:IsEventRegistered("LOOT_OPENED") then
+        LootFrame:SetParent(lootState.hiddenAnchor)
+    end
 end
 
--- Collect all items and close to empty corpse quickly because manual looting is slow
+-- Reparent loot frame back to UIParent to make it visible
+local function RevealLootFrame()
+    lootState.frameHidden = false
+    if LootFrame:IsEventRegistered("LOOT_OPENED") then
+        LootFrame:SetParent(UIParent)
+        LootFrame:SetFrameStrata("HIGH")
+    end
+end
 
-local function LootHandler()
-    if GetCVarBool("autoLootDefault") == IsModifiedClick("AUTOLOOTTOGGLE") then return end
+-- Stop any in-progress slot ticker
+local function StopSlotTicker()
+    if lootState.slotTicker then
+        lootState.slotTicker:Cancel()
+    end
+end
 
-    for slotIndex = GetNumLootItems(), 1, -1 do
-        LootSlot(slotIndex)
+-- Attempt to loot a single slot, mark failure if slot is locked
+local function TryLootSlot(slotIndex)
+    local slotType = GetLootSlotType(slotIndex)
+    if slotType == Enum.LootSlotType.None then return true end
+
+    local _, _, _, isLocked = GetLootSlotInfo(slotIndex)
+    if isLocked then
+        lootState.slotFailed = true
+        return false
     end
 
-    CloseLoot()
+    LootSlot(slotIndex)
+    return true
 end
 
--- Register and dispatch events to automate looting because centralized routing is cleaner
+-- Step through all loot slots one per tick to avoid server race conditions
+local function BeginSlotLooting(totalSlots)
+    StopSlotTicker()
+    local currentSlot = totalSlots
 
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:RegisterEvent("LOOT_READY")
+    lootState.slotTicker = C_Timer.NewTicker(0.033, function()
+        if currentSlot >= 1 then
+            TryLootSlot(currentSlot)
+            currentSlot = currentSlot - 1
+        else
+            if lootState.slotFailed then
+                RevealLootFrame()
+            end
+            StopSlotTicker()
+        end
+    end, totalSlots + 1)
+end
 
-eventFrame:SetScript("OnEvent", function(self, event)
+-- Decide whether to auto-loot or show the frame when a corpse is opened
+local function OnLootWindowReady()
+    lootState.sessionActive = true
+
+    local totalSlots = GetNumLootItems()
+    if totalSlots == 0 or lootState.lastSlotCount == totalSlots then return end
+
+    local autoLootActive = GetCVarBool("autoLootDefault") ~= IsModifiedClick("AUTOLOOTTOGGLE")
+    if autoLootActive then
+        BeginSlotLooting(totalSlots)
+    else
+        RevealLootFrame()
+    end
+
+    lootState.lastSlotCount = totalSlots
+end
+
+-- Clean up session state and re-suppress the loot frame when looting ends
+local function OnLootWindowClosed()
+    lootState.sessionActive = false
+    lootState.frameHidden = true
+    lootState.slotFailed = false
+    lootState.lastSlotCount = nil
+    StopSlotTicker()
+    SuppressLootFrame()
+end
+
+-- Reveal loot frame mid-session if the bag is full so nothing is missed
+local function OnGameErrorMessage(_, message)
+    if tContains({ ERR_INV_FULL, ERR_ITEM_MAX_COUNT }, message) then
+        if lootState.sessionActive and lootState.frameHidden then
+            RevealLootFrame()
+        end
+    end
+end
+
+-- Apply fast loot rate CVar on login
+local function OnPlayerLogin()
+    SetCVar("autoLootRate", 0)
+    SuppressLootFrame()
+end
+
+-- Register all required events
+local lootEventFrame = CreateFrame("Frame")
+lootEventFrame:RegisterEvent("PLAYER_LOGIN")
+lootEventFrame:RegisterEvent("LOOT_READY")
+lootEventFrame:RegisterEvent("LOOT_CLOSED")
+lootEventFrame:RegisterEvent("UI_ERROR_MESSAGE")
+
+lootEventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_LOGIN" then
-        LootConfig()
+        OnPlayerLogin()
     elseif event == "LOOT_READY" then
-        LootHandler()
+        OnLootWindowReady()
+    elseif event == "LOOT_CLOSED" then
+        OnLootWindowClosed()
+    elseif event == "UI_ERROR_MESSAGE" then
+        OnGameErrorMessage(...)
     end
 end)
