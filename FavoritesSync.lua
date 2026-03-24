@@ -1,6 +1,6 @@
--- Save and import auction house favorites across characters to sync collections because favorites are per-character by default
+-- Save and import auction house favorites across characters because favorites are per-character by default
 
--- Initialize database table for a given key to ensure storage exists because saved variables may be nil on first load
+-- Initialize database table for a given key because saved variables may be nil on first load
 
 local function GetDatabase(key)
     ItemFlowAccountDB = ItemFlowAccountDB or {}
@@ -8,36 +8,44 @@ local function GetDatabase(key)
     return ItemFlowAccountDB[key]
 end
 
--- Create save and import button pair on a parent frame to provide user controls because favorites sync requires manual trigger
+-- Create a square icon button matching the native favorites search button style
 
-local function CreateButtonPair(parent, onSave, onImport)
-    local saveButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    saveButton:SetSize(130, 22)
-    saveButton:SetText("Save Favorites")
-    saveButton:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -24, 4)
-    saveButton:SetScript("OnClick", onSave)
-    saveButton:Hide()
+local function CreateIconButton(parent, atlas, tooltip, onClick)
+    local button = CreateFrame("Button", nil, parent, "SquareIconButtonTemplate")
+    button.Icon:SetAtlas(atlas)
+    button.Icon:Show()
 
-    local importButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    importButton:SetSize(130, 22)
-    importButton:SetText("Import Favorites")
-    importButton:SetPoint("RIGHT", saveButton, "LEFT", -8, 0)
-    importButton:SetScript("OnClick", onImport)
-    importButton:Hide()
+    button:SetScript("OnClick", onClick)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        GameTooltip:SetText(tooltip)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", GameTooltip_Hide)
 
-    return saveButton, importButton
+    return button
 end
 
--- Define auction house favorites module to encapsulate all sync logic because grouping related state and functions improves maintainability
+-- Print a single item line with green [+] prefix and native item link
+
+local function PrintItemLine(itemID)
+    local _, itemLink = C_Item.GetItemInfo(itemID)
+    if itemLink then
+        print("|cff00AA00[+]|r " .. itemLink)
+    else
+        print(string.format("|cff00AA00[+]|r |cffFFFF00Item %d|r", itemID))
+    end
+end
+
+-- Auction house favorites sync module
 
 local auctionHouse = {
     isSavePending = false,
-    saveButton = nil,
-    importButton = nil,
-    isBrowseHooked = false
+    saveButton    = nil,
+    importButton  = nil,
 }
 
--- Serialize item key fields to a storable table to persist favorites because raw item keys contain nil values that break serialization
+-- Serialize item key fields to a storable table because raw keys contain nil values that break serialization
 
 function auctionHouse.SerializeItemKey(itemKey)
     return {
@@ -48,7 +56,7 @@ function auctionHouse.SerializeItemKey(itemKey)
     }
 end
 
--- Deserialize stored data back to an item key to restore favorites because the game API expects nil instead of zero for unused fields
+-- Deserialize stored data back to an item key because the API expects nil instead of zero for unused fields
 
 function auctionHouse.DeserializeItemKey(data)
     return {
@@ -59,7 +67,7 @@ function auctionHouse.DeserializeItemKey(data)
     }
 end
 
--- Process browse results to capture favorites into database to complete a pending save because results arrive asynchronously after search
+-- Process browse results to capture favorites into database because results arrive asynchronously after search
 
 function auctionHouse.OnBrowseResultsUpdated()
     if not auctionHouse.isSavePending then return end
@@ -78,10 +86,13 @@ function auctionHouse.OnBrowseResultsUpdated()
         end
     end
 
-    print(string.format("|cff00ff00ItemFlow:|r %d AH favorite(s) saved to account.", #database.favorites))
+    print("|cffFFFF00Saved Favorites:|r")
+    for _, data in ipairs(database.favorites) do
+        PrintItemLine(data.itemID)
+    end
 end
 
--- Trigger a favorites search to retrieve current favorites to save them because the API requires a search before results are available
+-- Trigger a favorites search to save current favorites because the API requires a search before results are available
 
 function auctionHouse.Save()
     if not C_AuctionHouse.FavoritesAreAvailable() then
@@ -98,7 +109,7 @@ function auctionHouse.Save()
     C_AuctionHouse.SearchForFavorites({})
 end
 
--- Import saved favorites from database to restore them on current character because favorites need to be set individually via API
+-- Import saved favorites from database to restore them on current character
 
 function auctionHouse.Import()
     if not C_AuctionHouse.FavoritesAreAvailable() then
@@ -108,7 +119,7 @@ function auctionHouse.Import()
 
     local database = GetDatabase("AuctionFavorites")
     if not database.favorites or #database.favorites == 0 then
-        print("|cffff9900ItemFlow:|r No saved AH favorites found. Save them on another character first.")
+        print("|cffFFFF00Auction Favorites: No items saved.|r")
         return
     end
 
@@ -117,70 +128,60 @@ function auctionHouse.Import()
         return
     end
 
-    local added, skipped = 0, 0
+    local addedItems = {}
 
     for _, data in ipairs(database.favorites) do
         local itemKey = auctionHouse.DeserializeItemKey(data)
-        if C_AuctionHouse.IsFavoriteItem(itemKey) then
-            skipped = skipped + 1
-        else
+        if not C_AuctionHouse.IsFavoriteItem(itemKey) then
             C_AuctionHouse.SetFavoriteItem(itemKey, true)
-            added = added + 1
+            addedItems[#addedItems + 1] = itemKey.itemID
         end
     end
 
-    print(string.format("|cff00ff00ItemFlow:|r Imported %d AH favorite(s). %d already present, skipped.", added, skipped))
+    if #addedItems == 0 then
+        print("|cffFFFF00Auction Favorites: No new items added.|r")
+    else
+        print("|cffFFFF00Imported Favorites:|r")
+        for _, itemID in ipairs(addedItems) do
+            PrintItemLine(itemID)
+        end
+    end
+
     C_AuctionHouse.SearchForFavorites({})
 end
 
--- Toggle button visibility based on browse frame state to show controls only when relevant because buttons should not appear on other AH tabs
-
-function auctionHouse.UpdateButtonVisibility()
-    if not auctionHouse.saveButton then return end
-
-    local isVisible = AuctionHouseFrame
-        and AuctionHouseFrame:IsShown()
-        and AuctionHouseFrame.BrowseResultsFrame
-        and AuctionHouseFrame.BrowseResultsFrame:IsShown()
-
-    if isVisible then
-        auctionHouse.saveButton:Show()
-        auctionHouse.importButton:Show()
-    else
-        auctionHouse.saveButton:Hide()
-        auctionHouse.importButton:Hide()
-    end
-end
-
--- Create sync buttons on auction house frame to provide save and import controls because users need a way to trigger sync manually
+-- Create icon buttons next to the native favorites search button
 
 function auctionHouse.Setup()
     if auctionHouse.saveButton then return end
     if not AuctionHouseFrame then return end
 
-    auctionHouse.saveButton, auctionHouse.importButton = CreateButtonPair(AuctionHouseFrame, auctionHouse.Save, auctionHouse.Import)
+    local searchBar = AuctionHouseFrame.SearchBar
+    if not searchBar or not searchBar.FavoritesSearchButton then return end
+
+    local anchor = searchBar.FavoritesSearchButton
+    local width, height = anchor:GetSize()
+
+    auctionHouse.saveButton = CreateIconButton(searchBar, "poi-workorders", "Save Favorites", auctionHouse.Save)
+    auctionHouse.saveButton:SetSize(width, height)
+    auctionHouse.saveButton.Icon:SetSize(width * 0.6, height * 0.6)
+    auctionHouse.saveButton:SetPoint("RIGHT", anchor, "LEFT", -4, 0)
+
+    auctionHouse.importButton = CreateIconButton(searchBar, "GreenCross", "Import Favorites", auctionHouse.Import)
+    auctionHouse.importButton:SetSize(width, height)
+    auctionHouse.importButton.Icon:SetSize(width * 0.75, height * 0.75)
+    auctionHouse.importButton:SetPoint("RIGHT", auctionHouse.saveButton, "LEFT", -4, 0)
 end
 
--- Hook browse frame show and hide to update button visibility because the browse tab can be toggled without reopening the auction house
-
-function auctionHouse.HookBrowseFrame()
-    if auctionHouse.isBrowseHooked then return end
-    if not AuctionHouseFrame or not AuctionHouseFrame.BrowseResultsFrame then return end
-
-    AuctionHouseFrame.BrowseResultsFrame:HookScript("OnShow", auctionHouse.UpdateButtonVisibility)
-    AuctionHouseFrame.BrowseResultsFrame:HookScript("OnHide", auctionHouse.UpdateButtonVisibility)
-    auctionHouse.isBrowseHooked = true
-end
-
--- Initialize auction house module when opened to set up buttons and hooks because frames must exist before they can be modified
+-- Show buttons when auction house opens
 
 function auctionHouse.OnShow()
     auctionHouse.Setup()
-    auctionHouse.HookBrowseFrame()
-    auctionHouse.UpdateButtonVisibility()
+    if auctionHouse.saveButton then auctionHouse.saveButton:Show() end
+    if auctionHouse.importButton then auctionHouse.importButton:Show() end
 end
 
--- Clean up module state when auction house closes to reset pending operations because leftover state could corrupt the next session
+-- Hide buttons and reset state when auction house closes
 
 function auctionHouse.OnClose()
     auctionHouse.isSavePending = false
@@ -188,7 +189,7 @@ function auctionHouse.OnClose()
     if auctionHouse.importButton then auctionHouse.importButton:Hide() end
 end
 
--- Register and handle auction house events to drive module lifecycle because each event triggers a distinct phase of the sync workflow
+-- Register events to drive module lifecycle
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
