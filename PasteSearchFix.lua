@@ -1,34 +1,42 @@
-local previousText = ""
-local frame = CreateFrame("Frame")
+-- Automatically trigger auction house search when pasting or using SetText
 
-local function StartSearch()
+local previousSearchText = ""
+
+-- Execute the auction house search if the frame is open
+local function TriggerAuctionSearch()
     if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then return end
     AuctionHouseFrame.SearchBar:StartSearch()
 end
 
-local function OnSetText(_, text)
+-- Search immediately when text is programmatically set via SetText
+local function OnSearchBoxSetText(_, text)
     if text and text ~= "" then
-        C_Timer.After(0, StartSearch)
+        C_Timer.After(0, TriggerAuctionSearch)
     end
 end
 
-local function OnTextChanged(self, isUserInput)
-    local currentText = self:GetText()
-    if isUserInput and currentText ~= "" and math.abs(#currentText - #previousText) > 1 then
-        C_Timer.After(0, StartSearch)
+-- Detect pasted input by checking for multi-character text changes
+local function OnSearchBoxTextChanged(self, isUserInput)
+    local currentSearchText = self:GetText()
+
+    if isUserInput and currentSearchText ~= "" and math.abs(#currentSearchText - #previousSearchText) > 1 then
+        C_Timer.After(0, TriggerAuctionSearch)
     end
-    previousText = currentText
+
+    previousSearchText = currentSearchText
 end
 
-local function OnAddonLoaded(addonName)
+-- Hook into the auction house search box once the UI loads
+local auctionHouseLoadHandler = CreateFrame("Frame")
+
+auctionHouseLoadHandler:RegisterEvent("ADDON_LOADED")
+
+auctionHouseLoadHandler:SetScript("OnEvent", function(_, _, addonName)
     if addonName ~= "Blizzard_AuctionHouseUI" then return end
-    frame:UnregisterEvent("ADDON_LOADED")
-    local searchBox = AuctionHouseFrame.SearchBar.SearchBox
-    hooksecurefunc(searchBox, "SetText", OnSetText)
-    searchBox:HookScript("OnTextChanged", OnTextChanged)
-end
 
-frame:RegisterEvent("ADDON_LOADED")
-frame:SetScript("OnEvent", function(_, _, addonName)
-    OnAddonLoaded(addonName)
+    auctionHouseLoadHandler:UnregisterEvent("ADDON_LOADED")
+
+    local searchBox = AuctionHouseFrame.SearchBar.SearchBox
+    hooksecurefunc(searchBox, "SetText", OnSearchBoxSetText)
+    searchBox:HookScript("OnTextChanged", OnSearchBoxTextChanged)
 end)
