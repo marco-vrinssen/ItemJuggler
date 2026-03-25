@@ -1,60 +1,48 @@
--- State
+-- Instantly loot all items without showing the loot frame
 
-local lastLootTime = 0
-local suppressLootFrameShow = false
-local LOOT_COOLDOWN = 0.2
+-- Hide the loot frame by reparenting it to an invisible container
+local lootFrameHiddenContainer = CreateFrame("Frame")
+lootFrameHiddenContainer:Hide()
 
--- Suppress LootFrame:Show() to prevent flash before our handler runs
+LootFrame:SetParent(lootFrameHiddenContainer)
 
+-- Suppress the loot frame from appearing while hidden
 local originalLootFrameShow = LootFrame.Show
 
 LootFrame.Show = function(self, ...)
-    if not suppressLootFrameShow then
-        originalLootFrameShow(self, ...)
+    if self:GetParent() == lootFrameHiddenContainer then
+        return
     end
+    return originalLootFrameShow(self, ...)
 end
 
--- Loot all unlocked items in reverse order to avoid index shifting
+-- Determine whether auto-loot is currently active based on CVar and modifier key
+local function IsAutoLootActive()
+    return GetCVarBool("autoLootDefault") ~= IsModifiedClick("AUTOLOOTTOGGLE")
+end
 
-local function LootUnlockedItems()
+-- Collect all loot slots in reverse order to avoid index shifting
+local function CollectAllLootSlots()
     for slotIndex = GetNumLootItems(), 1, -1 do
-        local _, _, _, _, _, isLocked = GetLootSlotInfo(slotIndex)
-        if not isLocked then
-            LootSlot(slotIndex)
+        LootSlot(slotIndex)
+    end
+end
+
+-- Handle loot events to either instantly collect or show the default loot frame
+local instantLootHandler = CreateFrame("Frame")
+
+instantLootHandler:RegisterEvent("LOOT_READY")
+instantLootHandler:RegisterEvent("LOOT_CLOSED")
+
+instantLootHandler:SetScript("OnEvent", function(_, event)
+    if event == "LOOT_READY" then
+        if IsAutoLootActive() then
+            CollectAllLootSlots()
+        else
+            LootFrame:SetParent(UIParent)
         end
+
+    elseif event == "LOOT_CLOSED" then
+        LootFrame:SetParent(lootFrameHiddenContainer)
     end
-end
-
--- Hide frame during looting, restore if locked items remain
-
-local function SuppressAndLoot()
-    suppressLootFrameShow = true
-    LootFrame:Hide()
-
-    LootUnlockedItems()
-
-    suppressLootFrameShow = false
-
-    if GetNumLootItems() == 0 then
-        CloseLoot()
-    else
-        LootFrame:Show()
-    end
-end
-
--- Skip if auto-loot is inactive or cooldown has not elapsed
-
-local function OnLootReady()
-    if GetCVarBool("autoLootDefault") == IsModifiedClick("AUTOLOOTTOGGLE") then return end
-    if (GetTime() - lastLootTime) < LOOT_COOLDOWN then return end
-
-    SuppressAndLoot()
-
-    lastLootTime = GetTime()
-end
-
--- Register
-
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("LOOT_READY")
-eventFrame:SetScript("OnEvent", OnLootReady)
+end)
