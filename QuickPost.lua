@@ -4,7 +4,6 @@ local quickPostFrame = CreateFrame("Frame")
 local isPostEnabled = false
 
 -- Click the visible sell frame post button to submit an auction because the auction house has multiple sell frames and only one is active
-
 local function PostAuction()
     if not isPostEnabled then return end
     if not AuctionHouseFrame or not AuctionHouseFrame:IsShown() then return end
@@ -23,7 +22,6 @@ local function PostAuction()
 end
 
 -- Enable spacebar capture when auction house opens to activate quick posting because the keybind should only work while the auction house is visible
-
 local function OnAuctionHouseShow()
     isPostEnabled = true
     quickPostFrame:SetScript("OnKeyDown", function(_, key)
@@ -40,7 +38,6 @@ local function OnAuctionHouseShow()
 end
 
 -- Disable spacebar capture when auction house closes to restore normal input because the keybind should not interfere outside the auction house
-
 local function OnAuctionHouseClosed()
     isPostEnabled = false
     quickPostFrame:SetScript("OnKeyDown", nil)
@@ -48,10 +45,8 @@ local function OnAuctionHouseClosed()
 end
 
 -- Register auction house events to toggle quick post mode because the feature activates and deactivates with the auction house lifecycle
-
 quickPostFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
 quickPostFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
-
 quickPostFrame:SetScript("OnEvent", function(_, event)
     if event == "AUCTION_HOUSE_SHOW" then
         OnAuctionHouseShow()

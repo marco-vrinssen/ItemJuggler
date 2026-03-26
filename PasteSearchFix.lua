@@ -28,9 +28,7 @@ end
 
 -- Hook into the auction house search box once the UI loads
 local auctionHouseLoadHandler = CreateFrame("Frame")
-
 auctionHouseLoadHandler:RegisterEvent("ADDON_LOADED")
-
 auctionHouseLoadHandler:SetScript("OnEvent", function(_, _, addonName)
     if addonName ~= "Blizzard_AuctionHouseUI" then return end
 

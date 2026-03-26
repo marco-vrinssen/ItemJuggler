@@ -30,10 +30,8 @@ end
 
 -- Handle loot events to either instantly collect or show the default loot frame
 local instantLootHandler = CreateFrame("Frame")
-
 instantLootHandler:RegisterEvent("LOOT_READY")
 instantLootHandler:RegisterEvent("LOOT_CLOSED")
-
 instantLootHandler:SetScript("OnEvent", function(_, event)
     if event == "LOOT_READY" then
         if IsAutoLootActive() then

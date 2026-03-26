@@ -1,7 +1,6 @@
 -- Save and import auction house favorites across characters because favorites are per-character by default
 
 -- Initialize database table for a given key because saved variables may be nil on first load
-
 local function GetDatabase(key)
     ItemFlowAccountDB = ItemFlowAccountDB or {}
     ItemFlowAccountDB[key] = ItemFlowAccountDB[key] or {}
@@ -9,7 +8,6 @@ local function GetDatabase(key)
 end
 
 -- Create a square icon button matching the native favorites search button style
-
 local function CreateIconButton(parent, atlas, tooltip, onClick)
     local button = CreateFrame("Button", nil, parent, "SquareIconButtonTemplate")
     button.Icon:SetAtlas(atlas)
@@ -27,7 +25,6 @@ local function CreateIconButton(parent, atlas, tooltip, onClick)
 end
 
 -- Print a single item line with green [+] prefix and native item link
-
 local function PrintItemLine(itemID)
     local _, itemLink = C_Item.GetItemInfo(itemID)
     if itemLink then
@@ -38,7 +35,6 @@ local function PrintItemLine(itemID)
 end
 
 -- Auction house favorites sync module
-
 local auctionHouse = {
     isSavePending = false,
     saveButton    = nil,
@@ -46,7 +42,6 @@ local auctionHouse = {
 }
 
 -- Serialize item key fields to a storable table because raw keys contain nil values that break serialization
-
 function auctionHouse.SerializeItemKey(itemKey)
     return {
         itemID = itemKey.itemID,
@@ -57,7 +52,6 @@ function auctionHouse.SerializeItemKey(itemKey)
 end
 
 -- Deserialize stored data back to an item key because the API expects nil instead of zero for unused fields
-
 function auctionHouse.DeserializeItemKey(data)
     return {
         itemID = data.itemID,
@@ -68,7 +62,6 @@ function auctionHouse.DeserializeItemKey(data)
 end
 
 -- Process browse results to capture favorites into database because results arrive asynchronously after search
-
 function auctionHouse.OnBrowseResultsUpdated()
     if not auctionHouse.isSavePending then return end
 
@@ -93,7 +86,6 @@ function auctionHouse.OnBrowseResultsUpdated()
 end
 
 -- Trigger a favorites search to save current favorites because the API requires a search before results are available
-
 function auctionHouse.Save()
     if not C_AuctionHouse.FavoritesAreAvailable() then
         print("|cffff9900ItemFlow:|r AH favorites are not available right now.")
@@ -110,7 +102,6 @@ function auctionHouse.Save()
 end
 
 -- Import saved favorites from database to restore them on current character
-
 function auctionHouse.Import()
     if not C_AuctionHouse.FavoritesAreAvailable() then
         print("|cffff9900ItemFlow:|r AH favorites are not available right now.")
@@ -151,7 +142,6 @@ function auctionHouse.Import()
 end
 
 -- Create icon buttons next to the native favorites search button
-
 function auctionHouse.Setup()
     if auctionHouse.saveButton then return end
     if not AuctionHouseFrame then return end
@@ -174,7 +164,6 @@ function auctionHouse.Setup()
 end
 
 -- Show buttons when auction house opens
-
 function auctionHouse.OnShow()
     auctionHouse.Setup()
     if auctionHouse.saveButton then auctionHouse.saveButton:Show() end
@@ -182,7 +171,6 @@ function auctionHouse.OnShow()
 end
 
 -- Hide buttons and reset state when auction house closes
-
 function auctionHouse.OnClose()
     auctionHouse.isSavePending = false
     if auctionHouse.saveButton then auctionHouse.saveButton:Hide() end
@@ -190,12 +178,10 @@ function auctionHouse.OnClose()
 end
 
 -- Register events to drive module lifecycle
-
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
 eventFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
 eventFrame:RegisterEvent("AUCTION_HOUSE_BROWSE_RESULTS_UPDATED")
-
 eventFrame:SetScript("OnEvent", function(_, event)
     if event == "AUCTION_HOUSE_SHOW" then
         auctionHouse.OnShow()
